@@ -1,0 +1,41 @@
+{
+  "name": "zyd-fetch",
+  "version": "0.0.1",
+  "description": "zyd fetch lib",
+  "keywords": [
+    "rollup",
+    "lib",
+    "fetch"
+  ],
+  "main": "./dist/index-es.js",
+  "scripts": {
+    "dev": "rollup -c -w",
+    "build": "rollup -c"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "xiaobai.li",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiaobaili1992/zyd-fetch.git"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.9",
+    "@babel/preset-env": "^7.23.9",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.12.0"
+  },
+  "peerDependencies": {
+    "ali-oss": "^6.21.0",
+    "axios": "^1.7.7"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}
