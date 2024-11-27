@@ -21,6 +21,7 @@ class ApiService {
   constructor({
     baseURL,
     timeout = 5000,
+    successStatusCode = 200,
     headers = {},
     requestInterceptor,
     responseInterceptor,
@@ -52,6 +53,12 @@ class ApiService {
       (response) => {
         if (responseInterceptor) {
           return responseInterceptor(response);
+        }
+        const { config, data } = response || {};
+        const { hasErrorMessage } = config || {};
+        const { code, msg } = data || {};
+        if (hasErrorMessage && code !== successStatusCode) {
+          onError(msg);
         }
         return response.data;
       },
@@ -154,7 +161,6 @@ class OSSService {
       return result;
     } catch (error) {
       console.error('OSS Upload Error:', error);
-      alert('OSS Upload Failed');
       throw error;
     }
   }
