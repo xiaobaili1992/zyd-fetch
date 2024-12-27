@@ -34,11 +34,12 @@ const requestInterceptor = (config) => {
   }
   return {
     ...config,
+    responseType: config.headers.isBlob ? 'blob' : 'json', // 如果要下载文件，需要设置responseType为blob; 不添加的话，下载文件是损坏的
     headers: {
-      ...config.headers,
       'Content-Type': 'application/json;charset=UTF-8',
       Token: token,
       Authorization: `Bearer ${token}`,
+      ...config.headers,
     },
   };
 };
