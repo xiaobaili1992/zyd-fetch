@@ -54,11 +54,15 @@ class ApiService {
         if (responseInterceptor) {
           return responseInterceptor(response);
         }
-        const { config, data } = response || {};
+        const { headers, config, data } = response || {};
+        const { isBlob } = headers || {};
         const { hasErrorMessage } = config || {};
         const { code, msg } = data || {};
         if (hasErrorMessage && code !== successStatusCode) {
           onError(msg);
+        }
+        if (isBlob) {
+          return response;
         }
         return response.data;
       },
