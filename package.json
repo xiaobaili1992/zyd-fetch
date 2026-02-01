@@ -7,10 +7,13 @@
     "lib",
     "fetch"
   ],
-  "main": "./dist/index-es.js",
+  "main": "dist/index.js",
+  "module": "dist/index-es.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "dev": "rollup -c -w",
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "type-check": "tsc --noEmit"
   },
   "files": [
     "dist"
@@ -29,7 +32,14 @@
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.12.0"
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/ali-oss": "^6.23.2",
+    "@types/node": "^25.1.0",
+    "ali-oss": "^6.23.0",
+    "axios": "^1.13.4",
+    "rollup": "^4.12.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "ali-oss": "^6.21.0",
