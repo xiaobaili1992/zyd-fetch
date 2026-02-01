@@ -1,6 +1,6 @@
 {
   "name": "zyd-fetch",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "zyd fetch lib",
   "keywords": [
     "rollup",

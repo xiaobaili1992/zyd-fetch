@@ -8,13 +8,11 @@ export default {
   input: 'src/index.ts',
   output: [{
     file: 'dist/index-es.js',
-    format: 'es',
-    sourcemap: true
+    format: 'es'
   }, {
     file: 'dist/index.js',
     format: 'umd',
     name: 'libBuild',
-    sourcemap: true,
     globals: {
       axios: 'axios',
       'ali-oss': 'OSS'
