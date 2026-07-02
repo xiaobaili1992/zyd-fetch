@@ -1,8 +1,9 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import OSS from 'ali-oss';
+import { createStream, StreamController, StreamOptions } from './stream';
 
 /**
- * HTTP Status Code Mapping
+ * HTTP 状态码映射
  */
 const _statusMap: Record<number, string> = {
   400: '请求错误',
@@ -20,11 +21,11 @@ const _statusMap: Record<number, string> = {
   506: 'http代理错误',
 };
 
-// Extend AxiosRequestConfig to include custom properties
+// 扩展 AxiosRequestConfig 以包含自定义属性
 interface CustomRequestConfig extends AxiosRequestConfig {
   hasErrorMessage?: boolean;
   returnFullResponse?: boolean;
-  filename?: string; // for download
+  filename?: string; // 用于文件下载
 }
 
 interface CustomInternalAxiosRequestConfig extends InternalAxiosRequestConfig {
@@ -44,8 +45,8 @@ interface ApiServiceOptions {
 }
 
 /**
- * ApiService Class
- * Encapsulates axios for unified request management, error handling, and interceptors.
+ * ApiService 类
+ * 封装 axios，统一管理请求、错误处理与拦截器。
  */
 class ApiService {
   private service: AxiosInstance;
@@ -69,11 +70,11 @@ class ApiService {
       headers,
     });
 
-    // Request Interceptor
+    // 请求拦截器
     this.service.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
         if (requestInterceptor) {
-          // Type assertion might be needed if interceptor modifies config type
+          // 若拦截器修改了 config 类型，可能需要类型断言
           return requestInterceptor(config);
         }
         return config;
@@ -84,7 +85,7 @@ class ApiService {
       },
     );
 
-    // Response Interceptor
+    // 响应拦截器
     this.service.interceptors.response.use(
       (response: AxiosResponse) => {
         if (responseInterceptor) {
@@ -97,12 +98,12 @@ class ApiService {
         const { hasErrorMessage } = customConfig || {};
         const { code, msg } = data || {};
         
-        // Business logic error check
+        // 业务逻辑错误校验
         if (hasErrorMessage && code !== successStatusCode) {
           onError && onError(msg);
         }
         
-        // Return full response if it's a blob or specifically requested
+        // 若为 blob 或调用方显式要求，则返回完整响应
         if (isBlob || customConfig.returnFullResponse) {
           return response;
         }
@@ -111,13 +112,13 @@ class ApiService {
       },
       (error: any) => {
         const config = (error.config || {}) as CustomInternalAxiosRequestConfig;
-        // Skip error handling if request was canceled
+        // 请求被取消时跳过错误处理
         if (axios.isCancel(error)) {
           return Promise.reject(error);
         }
 
         if (config?.hasErrorMessage !== false) {
-          // Default error message handling
+          // 默认错误信息处理
           if (error?.response) {
             const { status } = error.response;
             if (status && this.statusMap[status]) {
@@ -141,17 +142,17 @@ class ApiService {
   }
 
   /**
-   * Generic Request Method
-   * @param config - Axios request config
-   * @returns Response data
+   * 通用请求方法
+   * @param config - Axios 请求配置
+   * @returns 响应数据
    */
   async request<T = any>(config: CustomRequestConfig): Promise<T> {
     try {
-      // We might need to cast the result because our response interceptor can return data directly
+      // 响应拦截器可能直接返回 data，因此这里需要类型转换
       const response = await this.service.request(config);
       return response as unknown as T;
     } catch (error) {
-      // Allow caller to handle error as well
+      // 同时允许调用方处理该错误
       throw error;
     }
   }
@@ -173,7 +174,7 @@ class ApiService {
   }
 
   /**
-   * Upload file (multipart/form-data)
+   * 上传文件（multipart/form-data）
    */
   async upload<T = any>(url: string, formData: FormData, config: CustomRequestConfig = {}): Promise<T> {
     return this.request<T>({
@@ -186,7 +187,7 @@ class ApiService {
   }
 
   /**
-   * Download file
+   * 下载文件
    */
   async download(url: string, params?: any, config: CustomRequestConfig = {}): Promise<void> {
     if (typeof window === 'undefined') {
@@ -206,11 +207,53 @@ class ApiService {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl); // Clean up
+      window.URL.revokeObjectURL(blobUrl); // 清理
     } catch (error) {
       console.error('Download Error:', error);
       throw error;
     }
+  }
+
+  /**
+   * 面向 AI / Server-Sent Events 端点的流式请求。
+   *
+   * 复用当前实例的 baseURL 与默认 headers。返回的 controller 既是异步可迭代对象，
+   * 又会触发 `options` 中的回调，两种风格都能用：
+   *
+   * ```ts
+   * // 回调风格
+   * api.stream('/chat', { messages }, {
+   *   onMessage: (chunk) => console.log(chunk.json ?? chunk.data),
+   *   onDone: () => console.log('finished'),
+   *   onError: (e) => console.error(e),
+   * });
+   *
+   * // 异步迭代风格
+   * const stream = api.stream('/chat', { messages });
+   * for await (const chunk of stream) {
+   *   console.log(chunk.json ?? chunk.data);
+   * }
+   * ```
+   *
+   * 说明：fetch 传输（options.transport 默认为 'fetch'）会跑请求拦截器以复用
+   * token 注入等逻辑，但响应拦截器不会执行；baseURL 与默认 headers 同样会复用。
+   * 也可通过 `config.headers` 单独传入鉴权 header。
+   */
+  stream<T = any>(
+    url: string,
+    data?: any,
+    options: StreamOptions<T> = {},
+    config: { method?: string; params?: Record<string, any>; headers?: Record<string, any> } = {},
+  ): StreamController<T> {
+    return createStream<T>({
+      url,
+      method: config.method || 'POST',
+      data,
+      params: config.params,
+      headers: config.headers,
+      instance: this.service,
+      options,
+    });
   }
 }
 
@@ -222,8 +265,8 @@ interface OSSServiceOptions {
 }
 
 /**
- * OSS Service Class
- * Wrapper for ali-oss client
+ * OSS 服务类
+ * ali-oss 客户端封装
  */
 class OSSService {
   private client: OSS;
@@ -238,9 +281,9 @@ class OSSService {
   }
 
   /**
-   * Upload file to OSS
-   * @param filePath - Path in bucket
-   * @param file - File content
+   * 上传文件到 OSS
+   * @param filePath - bucket 内的路径
+   * @param file - 文件内容
    */
   async upload(filePath: string, file: any): Promise<OSS.PutObjectResult> {
     try {
@@ -255,3 +298,5 @@ class OSSService {
 
 export { ApiService, OSSService };
 export type { CustomRequestConfig, ApiServiceOptions, OSSServiceOptions };
+export { createStream, StreamController, SSEParser } from './stream';
+export type { StreamOptions, StreamChunk, SSEEvent } from './stream';

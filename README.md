@@ -10,6 +10,7 @@
 - 🚨 **统一错误处理**：支持全局错误回调，也支持单次请求屏蔽错误提示。
 - 📂 **文件处理**：内置文件上传 (`FormData`) 和下载 (`Blob`) 处理逻辑。
 - ☁️ **OSS 支持**：集成阿里云 OSS 上传功能。
+- 🌊 **流式输出**：内置 SSE 解析，适配 AI 流式响应，支持回调与 `for await...of` 两种消费方式。
 - 🛑 **请求取消**：支持 `AbortController` 取消请求。
 
 ## 📦 安装
@@ -231,6 +232,55 @@ searchUsers('alice', controller.signal);
 controller.abort();
 ```
 
+### 场景六：流式输出 (AI / SSE)
+
+使用 `stream` 方法对接 AI 对话等 Server-Sent Events 端点。它默认使用原生 `fetch` + `ReadableStream`（浏览器与 Node 18+ 通用），内置 SSE 协议解析，自动处理 `data:` 行、`[DONE]` 结束标记，并默认对每个数据块做 `JSON.parse`。
+
+返回的 controller 同时支持**回调**与 **`for await...of`** 两种消费方式。
+
+```typescript
+// 方式一：回调风格
+export const chat = (messages: any[]) => {
+  return api.stream('/v1/chat/completions', { messages, stream: true }, {
+    onMessage: (chunk) => {
+      // chunk.data 是原始文本；chunk.json 是解析后的对象（解析失败时为 undefined）
+      const delta = chunk.json?.choices?.[0]?.delta?.content;
+      if (delta) console.log(delta);
+    },
+    onDone: () => console.log('流结束'),
+    onError: (err) => console.error(err),
+  });
+};
+
+// 方式二：异步迭代风格
+export const chatIterate = async (messages: any[]) => {
+  const stream = api.stream('/v1/chat/completions', { messages, stream: true });
+  for await (const chunk of stream) {
+    const delta = chunk.json?.choices?.[0]?.delta?.content;
+    if (delta) process.stdout.write(delta);
+  }
+};
+```
+
+`stream` 方法签名：`stream(url, data?, options?, config?)`。
+
+- `data`：请求体，对象会自动 JSON 序列化（默认 `POST`）。
+- `options`：流式配置（见下方 `StreamOptions`）。
+- `config`：`{ method?, params?, headers? }`，用于覆盖方法、附加查询参数或自定义请求头。
+
+**取消流**：通过 `options.signal` 传入 `AbortSignal` 即可。
+
+```typescript
+const controller = new AbortController();
+api.stream('/v1/chat/completions', { messages }, {
+  signal: controller.signal,
+  onMessage: (chunk) => console.log(chunk.data),
+});
+controller.abort(); // 中止流
+```
+
+> **说明**：fetch 传输会复用实例的 `baseURL`、默认 headers，并跑一遍**请求拦截器**（因此 token 注入等逻辑同样生效），但**响应拦截器不会执行**（其解包语义不适用于流式数据块）。鉴权 header 也可通过 `config.headers` 单独传入。若需强制走 axios 传输，可设 `options.transport: 'axios'`。
+
 ## ☁️ 阿里云 OSS 上传
 
 `zyd-fetch` 封装了 `ali-oss`，简化了上传流程。
@@ -290,5 +340,26 @@ export const uploadToOss = async (file: File) => {
 | `hasErrorMessage` | `boolean` | `true` | 是否显示全局错误提示 |
 | `returnFullResponse` | `boolean` | `false` | 是否返回完整响应对象 (包含 headers 等) |
 | `filename` | `string` | - | 下载文件时的默认文件名 |
+
+### StreamOptions (流式请求配置)
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `onMessage` | `(chunk: StreamChunk) => void` | - | 每解析出一个数据块时触发 |
+| `onDone` | `() => void` | - | 流正常结束时触发一次 |
+| `onError` | `(error: any) => void` | - | 发生传输/解析错误或被中止时触发 |
+| `parseJSON` | `boolean` | `true` | 是否对每个 `data` 负载做 `JSON.parse`（结果放入 `chunk.json`，失败静默） |
+| `doneSentinel` | `string \| null` | `'[DONE]'` | `data` 中标记流结束的哨兵值，设为 `null` 可禁用 |
+| `transport` | `'fetch' \| 'axios'` | `'fetch'` | 底层传输方式，可用时默认 fetch |
+| `signal` | `AbortSignal` | - | 用于取消流 |
+
+### StreamChunk (流式数据块)
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `event` | `string` | SSE `event:` 字段，默认 `'message'` |
+| `data` | `string` | 原始 `data:` 负载 |
+| `id` | `string?` | SSE `id:` 字段（若存在） |
+| `json` | `T?` | 当 `parseJSON` 启用且解析成功时的解析结果 |
 
 ---
